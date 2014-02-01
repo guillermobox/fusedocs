@@ -9,7 +9,7 @@
 #include "sql.h"
 
 static char dbfile[] = "/tmp/test.db";
-static char initfile[] = "/home/guille/fusedocs/create_commands.sql";
+static char initfile[] = "create_commands.sql";
 const int EPATHFORMAT = -1;
 const int EPATHNOFOUND = -2;
 
