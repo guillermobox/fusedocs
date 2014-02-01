@@ -11,6 +11,16 @@
 #define FUSE_USE_VERSION 26
 #include <fuse.h>
 
+static int fusedoc_mknod(const char *path, mode_t mode, dev_t dev){
+	int ret;
+	ret = createpath(path+1);
+	if (ret) {
+		return -1;
+	} else {
+		return 0;
+	}
+};
+
 static int fusedoc_getattr(const char *path, struct stat *stbuf)
 {
 	int res = 0;
@@ -149,6 +159,7 @@ struct fuse_operations fusedoc_operations = {
 	.read = fusedoc_read,
 	.truncate = fusedoc_truncate,
 	.write = fusedoc_write,
+	.mknod = fusedoc_mknod,
 };
 
 int main(int argc, char **argv)

@@ -206,7 +206,7 @@ char **listpath(int *n)
 	return arraylist;
 }
 
-int createpath(char *path)
+int createpath(const char *path)
 {
 	sqlite3 *con;
 	sqlite3_stmt *cur;
