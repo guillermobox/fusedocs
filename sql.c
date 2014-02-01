@@ -245,3 +245,21 @@ int createpath(const char *path)
 
 	return 0;
 }
+
+int deletepath(const char *path)
+{
+	sqlite3 *con;
+	sqlite3_stmt *cur;
+	char statement[128];
+	int err;
+	con = test_and_create(dbfile);
+	sprintf(statement, "DELETE FROM FileIndex WHERE name=?");
+	err = sqlite3_prepare_v2(con, statement, 128, &cur, NULL);
+	if (err != SQLITE_OK) {
+		printf("Error preparing [%s]\n", statement);
+		exit(1);
+	}
+	sqlite3_bind_text(cur, 1, path, -1, NULL);
+	err = sqlite3_step(cur);
+	return 0;
+}
