@@ -263,3 +263,22 @@ int deletepath(const char *path)
 	err = sqlite3_step(cur);
 	return 0;
 }
+
+int renamepath(const char *oldpath, const char *newpath)
+{
+	sqlite3 *con;
+	sqlite3_stmt *cur;
+	char statement[128];
+	int err;
+	con = test_and_create(dbfile);
+	sprintf(statement, "UPDATE FileIndex SET name=? WHERE name=?");
+	err = sqlite3_prepare_v2(con, statement, 128, &cur, NULL);
+	if (err != SQLITE_OK) {
+		printf("Error preparing [%s]\n", statement);
+		exit(1);
+	}
+	sqlite3_bind_text(cur, 1, newpath, -1, NULL);
+	sqlite3_bind_text(cur, 2, oldpath, -1, NULL);
+	err = sqlite3_step(cur);
+	return 0;
+}

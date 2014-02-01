@@ -11,6 +11,16 @@
 #define FUSE_USE_VERSION 26
 #include <fuse.h>
 
+static int fusedoc_rename(const char *oldpath, const char *newpath){
+	int ret;
+	ret = renamepath(oldpath+1, newpath+1);
+	if (ret) {
+		return -1;
+	} else {
+		return 0;
+	}
+};
+
 static int fusedoc_mknod(const char *path, mode_t mode, dev_t dev){
 	int ret;
 	ret = createpath(path+1);
@@ -171,6 +181,7 @@ struct fuse_operations fusedoc_operations = {
 	.write = fusedoc_write,
 	.mknod = fusedoc_mknod,
 	.unlink = fusedoc_unlink,
+	.rename = fusedoc_rename,
 };
 
 int main(int argc, char **argv)

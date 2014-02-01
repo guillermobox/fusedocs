@@ -6,6 +6,7 @@ int createpath(const char *path);
 int checkpath(const char *path);
 char **listpath(int *n);
 int deletepath(const char *path);
+int renamepath(const char *oldpath, const char *newpath);
 
 const int EPATHFORMAT;
 const int EPATHNOFOUND;
