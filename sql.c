@@ -61,7 +61,7 @@ void *init_sqlite3_database(struct fuse_conn_info *conninfo)
 		}
 		fclose(f);
 	}
-	return 0;
+	return NULL;
 };
 
 static int find_file(const char *filename)
@@ -135,14 +135,13 @@ char *setpath(int id, char *content, int size)
 	return NULL;
 }
 
-char *getpath(int id, char **content, int *length)
-{
+int db_readfile(int blobid, struct st_file_buffer *buffer){
 	sqlite3_stmt *cur;
 	char inputline[128];
 	int ret;
 
 	sprintf(inputline, "SELECT content FROM Blobs WHERE rowid=%d;",
-		id);
+		blobid);
 
 	ret = sqlite3_prepare_v2(connection, inputline, 128, &cur, NULL);
 	if (ret != SQLITE_OK) {
@@ -151,12 +150,9 @@ char *getpath(int id, char **content, int *length)
 	}
 
 	ret = sqlite3_step(cur);
-	if (ret == SQLITE_DONE) {
-	} else {
-		*content =
-		    strdup((const char *) sqlite3_column_text(cur, 0));
-		*length = sqlite3_column_bytes(cur, 0) + 1;
-	}
+	buffer->data = strdup((const char *) sqlite3_column_text(cur, 0));
+	buffer->allocated = sqlite3_column_bytes(cur, 0) + 1;
+	buffer->used = buffer->allocated;
 	sqlite3_finalize(cur);
 
 	return NULL;

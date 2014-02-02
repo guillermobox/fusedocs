@@ -5,11 +5,11 @@ CC=cc
 all: fusedocs
 
 run: clean all
-	mkdir -p mountpoint 
+	mkdir -p mountpoint
 	./fusedocs -d mountpoint
 
 clean:
 	rm -f *.o /tmp/test.db fusedocs
 
-fusedocs: fusedocs.o sql.o 
-	$(CC) -o fusedocs sql.o fusedocs.o $(LDFLAGS)
+fusedocs: fusedocs.o sql.o buffer.o
+	$(CC) -o fusedocs sql.o fusedocs.o buffer.o $(LDFLAGS)
