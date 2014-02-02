@@ -182,6 +182,8 @@ struct fuse_operations fusedoc_operations = {
 	.mknod = fusedoc_mknod,
 	.unlink = fusedoc_unlink,
 	.rename = fusedoc_rename,
+	.destroy = destroy_sqlite3_database,
+	.init = init_sqlite3_database,
 };
 
 int main(int argc, char **argv)

@@ -8,27 +8,31 @@
 #include <string.h>
 #include "sql.h"
 
-static char dbfile[] = "/tmp/test.db";
+static char dbname[] = "/tmp/test.db";
 static char initfile[] = "create_commands.sql";
+static sqlite3 *connection;
 const int EPATHFORMAT = -1;
 const int EPATHNOFOUND = -2;
 
-static sqlite3 *test_and_create(char *dbname)
+void destroy_sqlite3_database(void *conn){
+	sqlite3_close(connection);
+};
+
+void *init_sqlite3_database(struct fuse_conn_info *conninfo)
 {
-	sqlite3 *ptr;
 	sqlite3_stmt *sqlcursor;
-	FILE *f;
-	char inputline[128];
 	int ret;
 
 	if (access(dbname, F_OK) != -1) {
-		sqlite3_open_v2(dbname, &ptr,
+		sqlite3_open_v2(dbname, &connection,
 				SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
 				NULL);
 	} else {
+		FILE *f;
+		char inputline[128];
 
 		f = fopen(initfile, "r");
-		sqlite3_open_v2(dbname, &ptr,
+		sqlite3_open_v2(dbname, &connection,
 				SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
 				NULL);
 
@@ -36,7 +40,7 @@ static sqlite3 *test_and_create(char *dbname)
 			if (fgets(inputline, 128, f) == NULL)
 				continue;
 			ret =
-			    sqlite3_prepare_v2(ptr, inputline, 128,
+			    sqlite3_prepare_v2(connection, inputline, 128,
 					       &sqlcursor, NULL);
 			if (ret != SQLITE_OK) {
 				printf("Error preparing [%s]!\n",
@@ -57,11 +61,10 @@ static sqlite3 *test_and_create(char *dbname)
 		}
 		fclose(f);
 	}
+	return 0;
+};
 
-	return ptr;
-}
-
-static int find_file(const char *filename, sqlite3 * con)
+static int find_file(const char *filename)
 {
 	sqlite3_stmt *cur;
 	char statement[128];
@@ -70,7 +73,7 @@ static int find_file(const char *filename, sqlite3 * con)
 	sprintf(statement, "SELECT id FROM FileIndex WHERE name=\"%s\"",
 		filename);
 
-	err = sqlite3_prepare_v2(con, statement, 128, &cur, NULL);
+	err = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
 	if (err != SQLITE_OK) {
 		printf("Error doing [%s]!\n", statement);
 		exit(1);
@@ -79,12 +82,10 @@ static int find_file(const char *filename, sqlite3 * con)
 	err = sqlite3_step(cur);
 	if (err == SQLITE_DONE) {
 		sqlite3_finalize(cur);
-		sqlite3_close(con);
 		return EPATHNOFOUND;
 	} else {
 		int ret = sqlite3_column_int(cur, 0);
 		sqlite3_finalize(cur);
-		sqlite3_close(con);
 		return ret;
 	}
 }
@@ -95,19 +96,15 @@ int checkpath(const char *path)
 	if (path[0] != '/') {
 		return EPATHFORMAT;
 	} else {
-		sqlite3 *con;
-		con = test_and_create(dbfile);
 		if (!strncmp(path, "/", strlen(path))) {
-			sqlite3_close(con);
 			return 0;
 		} else {
-			id = find_file(path + 1, con);
+			id = find_file(path + 1);
 			if (id < 0) {
 				printf("File not found!\n");
 			} else {
 				printf("File found: %d\n", id);
 			}
-			sqlite3_close(con);
 			return id;
 		}
 	}
@@ -116,13 +113,11 @@ int checkpath(const char *path)
 
 char *setpath(int id, char *content, int size)
 {
-	sqlite3 *con;
 	sqlite3_stmt *cur;
 	char statement[128];
 	int ret;
-	con = test_and_create(dbfile);
 	sprintf(statement, "UPDATE Blobs SET content=? WHERE rowid=?");
-	ret = sqlite3_prepare_v2(con, statement, 128, &cur, NULL);
+	ret = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
 	sqlite3_bind_blob(cur, 1, content, size, SQLITE_STATIC);
 	sqlite3_bind_int(cur, 2, id);
 	if (ret != SQLITE_OK) {
@@ -136,24 +131,20 @@ char *setpath(int id, char *content, int size)
 		printf("ERROR, NOT DONE!\n");
 
 	sqlite3_finalize(cur);
-	sqlite3_close(con);
 
 	return NULL;
 }
 
 char *getpath(int id, char **content, int *length)
 {
-	sqlite3 *con;
 	sqlite3_stmt *cur;
 	char inputline[128];
 	int ret;
 
-	con = test_and_create(dbfile);
-
 	sprintf(inputline, "SELECT content FROM Blobs WHERE rowid=%d;",
 		id);
 
-	ret = sqlite3_prepare_v2(con, inputline, 128, &cur, NULL);
+	ret = sqlite3_prepare_v2(connection, inputline, 128, &cur, NULL);
 	if (ret != SQLITE_OK) {
 		printf("Error preparing [%s]\n", inputline);
 		exit(1);
@@ -168,13 +159,11 @@ char *getpath(int id, char **content, int *length)
 	}
 	sqlite3_finalize(cur);
 
-	sqlite3_close(con);
 	return NULL;
 }
 
 char **listpath(int *n)
 {
-	sqlite3 *con;
 	sqlite3_stmt *cur;
 	char statement[128];
 	char **arraylist;
@@ -183,11 +172,9 @@ char **listpath(int *n)
 
 	arraylist = malloc(sizeof(char *) * allocated);
 
-	con = test_and_create(dbfile);
-
 	sprintf(statement, "SELECT name FROM FileIndex");
 
-	err = sqlite3_prepare_v2(con, statement, 128, &cur, NULL);
+	err = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
 	if (err != SQLITE_OK) {
 		printf("Error preparing [%s]\n", statement);
 		exit(1);
@@ -208,15 +195,13 @@ char **listpath(int *n)
 
 int createpath(const char *path)
 {
-	sqlite3 *con;
 	sqlite3_stmt *cur;
 	char statement[128];
 	char *content = "";
 	int id, ret, size = 0;
 
-	con = test_and_create(dbfile);
 	sprintf(statement, "INSERT INTO Blobs VALUES (?)");
-	ret = sqlite3_prepare_v2(con, statement, 128, &cur, NULL);
+	ret = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
 	sqlite3_bind_blob(cur, 1, content, size, SQLITE_STATIC);
 	if (ret != SQLITE_OK) {
 		printf("Error preparing [%s]\n", statement);
@@ -231,30 +216,25 @@ int createpath(const char *path)
 	};
 	sqlite3_finalize(cur);
 
-	id = sqlite3_last_insert_rowid(con);
+	id = sqlite3_last_insert_rowid(connection);
 
 	sprintf(statement,
 		"INSERT INTO FileIndex (blobid, name) VALUES (?,?)");
-	sqlite3_prepare_v2(con, statement, 128, &cur, NULL);
+	sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
 	sqlite3_bind_int(cur, 1, id);
 	sqlite3_bind_text(cur, 2, path, strlen(path), NULL);
 	sqlite3_step(cur);
 	sqlite3_finalize(cur);
-
-	sqlite3_close(con);
-
 	return 0;
 }
 
 int deletepath(const char *path)
 {
-	sqlite3 *con;
 	sqlite3_stmt *cur;
 	char statement[128];
 	int err;
-	con = test_and_create(dbfile);
 	sprintf(statement, "DELETE FROM FileIndex WHERE name=?");
-	err = sqlite3_prepare_v2(con, statement, 128, &cur, NULL);
+	err = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
 	if (err != SQLITE_OK) {
 		printf("Error preparing [%s]\n", statement);
 		exit(1);
@@ -266,13 +246,11 @@ int deletepath(const char *path)
 
 int renamepath(const char *oldpath, const char *newpath)
 {
-	sqlite3 *con;
 	sqlite3_stmt *cur;
 	char statement[128];
 	int err;
-	con = test_and_create(dbfile);
 	sprintf(statement, "UPDATE FileIndex SET name=? WHERE name=?");
-	err = sqlite3_prepare_v2(con, statement, 128, &cur, NULL);
+	err = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
 	if (err != SQLITE_OK) {
 		printf("Error preparing [%s]\n", statement);
 		exit(1);
