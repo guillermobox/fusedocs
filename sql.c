@@ -159,8 +159,9 @@ int db_readfile(int blobid, struct st_file_buffer *buffer){
 	}
 
 	ret = sqlite3_step(cur);
-	buffer->data = strdup((const char *) sqlite3_column_text(cur, 0));
 	buffer->allocated = sqlite3_column_bytes(cur, 0);
+	buffer->data = malloc(buffer->allocated);
+	memcpy(buffer->data, sqlite3_column_blob(cur,0), buffer->allocated);
 	buffer->used = buffer->allocated;
 	printf("File size found for %d: %d\n", blobid, buffer->used);
 	sqlite3_finalize(cur);

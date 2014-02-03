@@ -6,8 +6,13 @@
 
 size_t buffer_read(struct st_file_buffer *buf, size_t length, off_t offset, char *dest)
 {
-	memcpy(dest, buf->data + offset, length);
-	return length;
+	if (length+offset > buf->used) {
+		memcpy(dest, buf->data + offset, buf->used - offset);
+		return buf->used - offset;
+	} else {
+		memcpy(dest, buf->data + offset, length);
+		return length;
+	}
 }
 
 size_t buffer_write(struct st_file_buffer *buf, size_t length, off_t offset, const char *orig)
