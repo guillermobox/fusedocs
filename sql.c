@@ -91,6 +91,29 @@ static int find_file(const char *filename, struct stat *stbuf)
 	}
 }
 
+int db_newtag(const char *tagname)
+{
+	sqlite3_stmt *cur;
+	char statement[128];
+	int ret;
+
+	if (strncmp(tagname, ".Trash", 6)==0)
+		return -1;
+
+	sprintf(statement, "INSERT INTO Tags (name) VALUES (?)");
+	ret = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
+	sqlite3_bind_text(cur, 1, tagname, strlen(tagname), NULL);
+	if (ret != SQLITE_OK) {
+		printf("Error preparing [%s]\n", statement);
+		exit(1);
+	}
+	ret = sqlite3_step(cur);
+	if (ret != SQLITE_DONE)
+		printf("ERROR, NOT DONE!\n");
+	sqlite3_finalize(cur);
+	return 0;
+}
+
 int checkpath(const char *path, struct stat *stbuf)
 {
 	int id;

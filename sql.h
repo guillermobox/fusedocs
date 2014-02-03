@@ -10,6 +10,7 @@ void * init_db(struct fuse_conn_info *conninfo);
 void destroy_db(void *conn);
 
 int db_readfile(int, struct st_file_buffer *);
+int db_newtag(const char *);
 
 char *getpath(int id, char **content, int *length);
 char *setpath(const char *,int id, char *content, int size);

@@ -92,6 +92,15 @@ static int fusedoc_readdir(const char *path, void *buf,
 }
 
 /*
+ * fusedoc_mkdir: create a directory with the given name and permissions
+ */
+static int fusedoc_mkdir(const char *path, mode_t dirmode)
+{
+	dirmode = dirmode | S_IFDIR;
+	return db_newtag(path+1);
+}
+
+/*
  * fusedoc_open: create a buffer with the file contents, keep it until
  * the release signal.
  */
@@ -230,10 +239,10 @@ struct fuse_operations fusedoc_operations = {
 	.open = fusedoc_open,
 	.release = fusedoc_release,
 	.read = fusedoc_read,
-//	.truncate = fusedoc_truncate,
 	.ftruncate = fusedoc_ftruncate,
 	.write = fusedoc_write,
 	.mknod = fusedoc_mknod,
+	.mkdir = fusedoc_mkdir,
 	.unlink = fusedoc_unlink,
 	.rename = fusedoc_rename,
 	.destroy = fusedoc_destroy,
