@@ -80,12 +80,17 @@ static int fusedoc_readdir(const char *path, void *buf,
 	filler(buf, "..", NULL, 0);
 
 	paths = listpath(&ammount);
-
 	for (i = 0; i < ammount; i++) {
 		filler(buf, paths[i], NULL, 0);
 		free(paths[i]);
 	}
+	free(paths);
 
+	paths = db_listtags(&ammount);
+	for (i = 0; i < ammount; i++) {
+		filler(buf, paths[i], NULL, 0);
+		free(paths[i]);
+	}
 	free(paths);
 
 	return 0;

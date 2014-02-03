@@ -64,6 +64,32 @@ void *init_db(struct fuse_conn_info *conninfo)
 	return NULL;
 };
 
+static int find_tag(const char *tagname, struct stat *stbuf)
+{
+	sqlite3_stmt *cur;
+	char statement[128];
+	int err;
+
+	sprintf(statement, "SELECT id FROM Tags WHERE name=?");
+
+	err = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
+	sqlite3_bind_text(cur, 1, tagname, strlen(tagname), NULL);
+	if (err != SQLITE_OK) {
+		printf("Error doing [%s]!\n", statement);
+		exit(1);
+	}
+
+	err = sqlite3_step(cur);
+	if (err == SQLITE_DONE) {
+		sqlite3_finalize(cur);
+		return EPATHNOFOUND;
+	} else {
+		int ret = sqlite3_column_int(cur, 0);
+		sqlite3_finalize(cur);
+		return ret;
+	}
+}
+
 static int find_file(const char *filename, struct stat *stbuf)
 {
 	sqlite3_stmt *cur;
@@ -121,6 +147,8 @@ int checkpath(const char *path, struct stat *stbuf)
 		return EPATHFORMAT;
 	} else {
 		if (!strncmp(path, "/", strlen(path))) {
+			return 0;
+		} else if (find_tag(path+1, stbuf)>=0) {
 			return 0;
 		} else {
 			id = find_file(path + 1, stbuf);
@@ -190,6 +218,37 @@ int db_readfile(int blobid, struct st_file_buffer *buffer){
 	sqlite3_finalize(cur);
 	return 0;
 }
+
+char ** db_listtags(int *n)
+{
+	sqlite3_stmt *cur;
+	char statement[128];
+	char **arraylist;
+	int err;
+	int count = 0, allocated = 128;
+
+	arraylist = malloc(sizeof(char *) * allocated);
+
+	sprintf(statement, "SELECT name FROM Tags");
+
+	err = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
+	if (err != SQLITE_OK) {
+		printf("Error preparing [%s]\n", statement);
+		exit(1);
+	}
+
+	do {
+		err = sqlite3_step(cur);
+		if (err == SQLITE_DONE)
+			break;
+		arraylist[count] =
+		    strdup((const char *) sqlite3_column_text(cur, 0));
+		count += 1;
+	} while (1);
+
+	*n = count;
+	return arraylist;
+};
 
 char **listpath(int *n)
 {
