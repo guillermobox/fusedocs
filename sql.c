@@ -14,11 +14,11 @@ static sqlite3 *connection;
 const int EPATHFORMAT = -1;
 const int EPATHNOFOUND = -2;
 
-void destroy_sqlite3_database(void *conn){
+void destroy_db(void *conn){
 	sqlite3_close(connection);
 };
 
-void *init_sqlite3_database(struct fuse_conn_info *conninfo)
+void *init_db(struct fuse_conn_info *conninfo)
 {
 	sqlite3_stmt *sqlcursor;
 	int ret;
@@ -64,16 +64,16 @@ void *init_sqlite3_database(struct fuse_conn_info *conninfo)
 	return NULL;
 };
 
-static int find_file(const char *filename)
+static int find_file(const char *filename, struct stat *stbuf)
 {
 	sqlite3_stmt *cur;
 	char statement[128];
 	int err;
 
-	sprintf(statement, "SELECT id FROM FileIndex WHERE name=\"%s\"",
-		filename);
+	sprintf(statement, "SELECT id,size FROM FileIndex WHERE name=?");
 
 	err = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
+	sqlite3_bind_text(cur, 1, filename, strlen(filename), NULL);
 	if (err != SQLITE_OK) {
 		printf("Error doing [%s]!\n", statement);
 		exit(1);
@@ -85,12 +85,13 @@ static int find_file(const char *filename)
 		return EPATHNOFOUND;
 	} else {
 		int ret = sqlite3_column_int(cur, 0);
+		stbuf->st_size = sqlite3_column_int(cur,1);
 		sqlite3_finalize(cur);
 		return ret;
 	}
 }
 
-int checkpath(const char *path)
+int checkpath(const char *path, struct stat *stbuf)
 {
 	int id;
 	if (path[0] != '/') {
@@ -99,39 +100,47 @@ int checkpath(const char *path)
 		if (!strncmp(path, "/", strlen(path))) {
 			return 0;
 		} else {
-			id = find_file(path + 1);
-			if (id < 0) {
-				printf("File not found!\n");
-			} else {
-				printf("File found: %d\n", id);
-			}
+			id = find_file(path + 1, stbuf);
 			return id;
 		}
 	}
 	return EPATHNOFOUND;
 }
 
-char *setpath(int id, char *content, int size)
+char *setpath(const char *path, int id, char *content, int size)
 {
 	sqlite3_stmt *cur;
 	char statement[128];
 	int ret;
+
+	path = path + 1;
+
+	printf("Setting this path: %s[%d] with this size: %d\n", path, id, size);
 	sprintf(statement, "UPDATE Blobs SET content=? WHERE rowid=?");
 	ret = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
-	sqlite3_bind_blob(cur, 1, content, size, SQLITE_STATIC);
+	sqlite3_bind_blob(cur, 1, content, size, SQLITE_TRANSIENT);
 	sqlite3_bind_int(cur, 2, id);
 	if (ret != SQLITE_OK) {
 		printf("Error preparing [%s]\n", statement);
 		exit(1);
 	}
-
 	ret = sqlite3_step(cur);
-
 	if (ret != SQLITE_DONE)
 		printf("ERROR, NOT DONE!\n");
-
 	sqlite3_finalize(cur);
 
+	sprintf(statement, "UPDATE FileIndex SET size=? WHERE name=?");
+	ret = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
+	sqlite3_bind_int(cur, 1, size);
+	sqlite3_bind_text(cur, 2, path, strlen(path), NULL);
+	if (ret != SQLITE_OK) {
+		printf("Error preparing [%s]\n", statement);
+		exit(1);
+	}
+	ret = sqlite3_step(cur);
+	if (ret != SQLITE_DONE)
+		printf("ERROR, NOT DONE!\n");
+	sqlite3_finalize(cur);
 	return NULL;
 }
 
@@ -151,11 +160,11 @@ int db_readfile(int blobid, struct st_file_buffer *buffer){
 
 	ret = sqlite3_step(cur);
 	buffer->data = strdup((const char *) sqlite3_column_text(cur, 0));
-	buffer->allocated = sqlite3_column_bytes(cur, 0) + 1;
+	buffer->allocated = sqlite3_column_bytes(cur, 0);
 	buffer->used = buffer->allocated;
+	printf("File size found for %d: %d\n", blobid, buffer->used);
 	sqlite3_finalize(cur);
-
-	return NULL;
+	return 0;
 }
 
 char **listpath(int *n)
