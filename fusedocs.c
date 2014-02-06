@@ -13,8 +13,36 @@
 #include <fuse.h>
 
 #define BUFFERLEN 128
+#define MAXSUBDIR 16
 
 struct st_file_buffer buffer_array[BUFFERLEN];
+struct st_path {
+	char * tokens[MAXSUBDIR];
+	char * basename;
+	int ntokens;
+};
+
+void create_path(const char *path, struct st_path *stpath){
+	char * ptr, *newptr;
+	char slash = '/';
+
+	ptr = (char*)path;
+	stpath->basename = NULL;
+	stpath->ntokens = 0;
+
+	while( (newptr = strchr(ptr, slash)) != NULL){
+		ptr = newptr+1;
+		newptr = strchr(ptr, slash);
+		if (newptr!=NULL){
+			*newptr = '\0';
+			stpath->tokens[stpath->ntokens++] = strdup(newptr);
+			*newptr = '/';
+		}
+		continue;
+	}
+
+	stpath->basename = strdup(ptr);
+};
 
 static int fusedoc_rename(const char *oldpath, const char *newpath){
 	int ret;
@@ -50,9 +78,11 @@ static int fusedoc_getattr(const char *path, struct stat *stbuf)
 {
 	int res = 0;
 	int id;
+	struct st_path stpath;
+	create_path(path, &stpath);
 
 	memset(stbuf, 0, sizeof(struct stat));
-	id = checkpath(path, stbuf);
+	id = checkpath(stpath.basename, stbuf);
 
 	if (id == 0) {
 		stbuf->st_mode = S_IFDIR | 0755;
@@ -113,8 +143,10 @@ static int fusedoc_open(const char *path, struct fuse_file_info *fi)
 {
 	int id, index;
 	struct stat filest;
+	struct st_path stpath;
 
-	id = checkpath(path, &filest);
+	create_path(path, &stpath);
+	id = checkpath(stpath.basename, &filest);
 
 	if (id < 1)
 		return -ENOENT;
@@ -140,10 +172,13 @@ static int fusedoc_release(const char *path, struct fuse_file_info *fi)
 	struct stat filest;
 	int id;
 
-	buffer = buffer_array + fi->fh;
-	id = checkpath(path, &filest);
+	struct st_path stpath;
+	create_path(path, &stpath);
 
-	setpath(path, id, buffer->data, buffer->used);
+	buffer = buffer_array + fi->fh;
+	id = checkpath(stpath.basename, &filest);
+
+	setpath(stpath.basename, id, buffer->data, buffer->used);
 
 	return 0;
 }
@@ -155,14 +190,17 @@ static int fusedoc_release(const char *path, struct fuse_file_info *fi)
 static int fusedoc_write(const char *path, const char *buf, size_t size,
 			 off_t offset, struct fuse_file_info *fi)
 {
-	int id;
 	struct st_file_buffer *buffer;
-	struct stat filest;
 
-	id = checkpath(path, &filest);
-
-	if (id < 0)
-		return -ENOENT;
+	/*
+		int id;
+		struct stat filest;
+		struct st_path stpath;
+		create_path(stpath.basename, &stpath);
+		id = checkpath(stpath.basename, &filest);
+		if (id < 0)
+			return -ENOENT;
+	*/
 
 	buffer = buffer_array + fi->fh;
 	return buffer_write(buffer, size, offset, buf);
@@ -176,8 +214,10 @@ static int fusedoc_ftruncate(const char *path, off_t size, struct fuse_file_info
 	int id;
 	struct stat filest;
 	struct st_file_buffer * buffer;
+	struct st_path stpath;
+	create_path(path, &stpath);
 
-	id = checkpath(path, &filest);
+	id = checkpath(stpath.basename, &filest);
 
 	if (id < 0)
 		return -ENOENT;
@@ -195,21 +235,9 @@ static int fusedoc_ftruncate(const char *path, off_t size, struct fuse_file_info
 static int fusedoc_read(const char *path, char *dest, size_t size,
 			off_t offset, struct fuse_file_info *fi)
 {
-	size_t len;
 	struct st_file_buffer * buffer;
-
 	buffer = buffer_array + fi->fh;
-	len = buffer->used;
-
-	if (offset < len) {
-		if (offset + size > len)
-			size = len - offset;
-		memcpy(dest, buffer->data + offset, size);
-	} else {
-		size = 0;
-	}
-
-	return size;
+	return (int) buffer_read(buffer, size, offset, dest);
 }
 
 /*
@@ -245,6 +273,7 @@ struct fuse_operations fusedoc_operations = {
 	.release = fusedoc_release,
 	.read = fusedoc_read,
 	.ftruncate = fusedoc_ftruncate,
+	.truncate = fusedoc_ftruncate,
 	.write = fusedoc_write,
 	.mknod = fusedoc_mknod,
 	.mkdir = fusedoc_mkdir,

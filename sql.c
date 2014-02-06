@@ -143,17 +143,13 @@ int db_newtag(const char *tagname)
 int checkpath(const char *path, struct stat *stbuf)
 {
 	int id;
-	if (path[0] != '/') {
-		return EPATHFORMAT;
+	if (strlen(path) == 0) {
+		return 0;
+	} else if (find_tag(path, stbuf)>=0) {
+		return 0;
 	} else {
-		if (!strncmp(path, "/", strlen(path))) {
-			return 0;
-		} else if (find_tag(path+1, stbuf)>=0) {
-			return 0;
-		} else {
-			id = find_file(path + 1, stbuf);
-			return id;
-		}
+		id = find_file(path, stbuf);
+		return id;
 	}
 	return EPATHNOFOUND;
 }
@@ -163,8 +159,6 @@ char *setpath(const char *path, int id, char *content, int size)
 	sqlite3_stmt *cur;
 	char statement[128];
 	int ret;
-
-	path = path + 1;
 
 	printf("Setting this path: %s[%d] with this size: %d\n", path, id, size);
 	sprintf(statement, "UPDATE Blobs SET content=? WHERE rowid=?");
@@ -214,7 +208,6 @@ int db_readfile(int blobid, struct st_file_buffer *buffer){
 	buffer->data = malloc(buffer->allocated);
 	memcpy(buffer->data, sqlite3_column_blob(cur,0), buffer->allocated);
 	buffer->used = buffer->allocated;
-	printf("File size found for %d: %d\n", blobid, buffer->used);
 	sqlite3_finalize(cur);
 	return 0;
 }
