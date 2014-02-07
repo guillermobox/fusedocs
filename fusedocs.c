@@ -116,7 +116,7 @@ static int fusedoc_readdir(const char *path, void *buf,
 	}
 	free(paths);
 
-	paths = db_listtags(&ammount);
+	paths = db_listtags(&ammount, &stpath);
 	for (i = 0; i < ammount; i++) {
 		filler(buf, paths[i], NULL, 0);
 		free(paths[i]);

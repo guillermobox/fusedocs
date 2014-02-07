@@ -212,7 +212,7 @@ int db_readfile(int blobid, struct st_file_buffer *buffer){
 	return 0;
 }
 
-char ** db_listtags(int *n)
+char ** db_listtags(int *n, struct st_path *stpath)
 {
 	sqlite3_stmt *cur;
 	char statement[128];
@@ -222,9 +222,27 @@ char ** db_listtags(int *n)
 
 	arraylist = malloc(sizeof(char *) * allocated);
 
-	sprintf(statement, "SELECT name FROM Tags");
+	if (stpath->ntokens) {
+		char * str = malloc(1024);
+		int tok;
 
-	err = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
+		strcpy(str, "SELECT name FROM Tags WHERE name NOT IN (");
+		for (tok = 0; tok < stpath->ntokens-1; tok++) {
+			strcat(str, "\"");
+			strcat(str, stpath->tokens[tok]);
+			strcat(str, "\", ");
+		}
+		strcat(str, "\"");
+		strcat(str, stpath->tokens[tok]);
+		strcat(str, "\"");
+		strcat(str, ")");
+		puts(str);
+		err = sqlite3_prepare_v2(connection, str, 1024, &cur, NULL);
+	} else {
+		sprintf(statement, "SELECT name FROM Tags");
+		err = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
+	}
+
 	if (err != SQLITE_OK) {
 		printf("Error preparing [%s]\n", statement);
 		exit(1);

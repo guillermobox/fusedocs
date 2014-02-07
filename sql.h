@@ -12,7 +12,7 @@ void destroy_db(void *conn);
 
 int db_readfile(int, struct st_file_buffer *);
 int db_newtag(const char *);
-char ** db_listtags(int *n);
+char ** db_listtags(int *n, struct st_path *);
 
 char *getpath(int id, char **content, int *length);
 char *setpath(const char *,int id, char *content, int size);
