@@ -47,7 +47,11 @@ static int fusedoc_rename(const char *oldpath, const char *newpath){
 
 static int fusedoc_mknod(const char *path, mode_t mode, dev_t dev){
 	int ret;
-	ret = createpath(path+1);
+
+	struct st_path stpath;
+	create_path(path, &stpath);
+
+	ret = createpath(&stpath);
 	if (ret) {
 		return -1;
 	} else {

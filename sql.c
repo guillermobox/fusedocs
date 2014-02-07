@@ -275,17 +275,20 @@ char **listpath(int *n, struct st_path *stpath)
 		char * str = malloc(1024);
 		int tok;
 
-		strcpy(str, "SELECT FileIndex.name FROM FileIndex, Tags, FileTagsRef WHERE Tags.id=FileTagsRef.tid AND FileIndex.id=FileTagsRef.fid AND Tags.name IN ( ");
-		for (tok = 0; tok < stpath->ntokens-1; tok++) {
-			strcat(str, "\"");
+		strcpy(str, "SELECT FileIndex.name FROM FileIndex WHERE FileIndex.id IN (");
+
+		//SELECT fid from filetagsref where tid=1 intersect SELECT fid from filetagsref where tid=2;
+
+		for (tok = 0; tok < stpath->ntokens; tok++) {
+			strcat(str, "SELECT fid FROM FileTagsRef, Tags WHERE tid=Tags.id AND Tags.name=\"");
 			strcat(str, stpath->tokens[tok]);
-			strcat(str, "\", ");
+			strcat(str, "\" ");
+			if (tok !=stpath->ntokens-1)
+			strcat(str, " INTERSECT ");
 		}
-		strcat(str, "\"");
-		strcat(str, stpath->tokens[tok]);
-		strcat(str, "\"");
 		strcat(str, ")");
 		puts(str);
+
 		err = sqlite3_prepare_v2(connection, str, 1024, &cur, NULL);
 	} else {
 		sprintf(statement, "SELECT name FROM FileIndex");
@@ -310,7 +313,7 @@ char **listpath(int *n, struct st_path *stpath)
 	return arraylist;
 }
 
-int createpath(const char *path)
+int createpath(struct st_path *stpath)
 {
 	sqlite3_stmt *cur;
 	char statement[128];
@@ -335,12 +338,22 @@ int createpath(const char *path)
 
 	id = sqlite3_last_insert_rowid(connection);
 
-	sprintf(statement,
-		"INSERT INTO FileIndex (blobid, name) VALUES (?,?)");
+	sprintf(statement, "INSERT INTO FileIndex (blobid, name) VALUES (?,?)");
 	sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
 	sqlite3_bind_int(cur, 1, id);
-	sqlite3_bind_text(cur, 2, path, strlen(path), NULL);
+	sqlite3_bind_text(cur, 2, stpath->basename, strlen(stpath->basename), NULL);
 	sqlite3_step(cur);
+
+	if (stpath->ntokens) {
+		int tok;
+		for (tok = 0; tok < stpath->ntokens; tok++) {
+			sprintf(statement, " INSERT INTO FileTagsRef VALUES ( (SELECT id FROM FileIndex WHERE name=?), (SELECT id FROM Tags WHERE name=?))");
+			sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
+			sqlite3_bind_text(cur, 1, stpath->basename, strlen(stpath->basename), NULL);
+			sqlite3_bind_text(cur, 2, stpath->tokens[tok], strlen(stpath->tokens[tok]), NULL);
+			sqlite3_step(cur);
+		}
+	};
 	sqlite3_finalize(cur);
 	return 0;
 }
