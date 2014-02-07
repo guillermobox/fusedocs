@@ -37,7 +37,11 @@ void create_path(const char *path, struct st_path *stpath){
 
 static int fusedoc_rename(const char *oldpath, const char *newpath){
 	int ret;
-	ret = renamepath(oldpath+1, newpath+1);
+	struct st_path stnewpath;
+	struct st_path stoldpath;
+	create_path(newpath, &stnewpath);
+	create_path(oldpath, &stoldpath);
+	ret = renamepath(&stoldpath, &stnewpath);
 	if (ret) {
 		return -1;
 	} else {
@@ -77,7 +81,7 @@ static int fusedoc_getattr(const char *path, struct stat *stbuf)
 	create_path(path, &stpath);
 
 	memset(stbuf, 0, sizeof(struct stat));
-	id = checkpath(stpath.basename, stbuf);
+	id = checkpath(&stpath, stbuf);
 
 	if (id == 0) {
 		stbuf->st_mode = S_IFDIR | 0755;
@@ -150,7 +154,7 @@ static int fusedoc_open(const char *path, struct fuse_file_info *fi)
 	struct st_path stpath;
 
 	create_path(path, &stpath);
-	id = checkpath(stpath.basename, &filest);
+	id = checkpath(&stpath, &filest);
 
 	if (id < 1)
 		return -ENOENT;
@@ -180,7 +184,7 @@ static int fusedoc_release(const char *path, struct fuse_file_info *fi)
 	create_path(path, &stpath);
 
 	buffer = buffer_array + fi->fh;
-	id = checkpath(stpath.basename, &filest);
+	id = checkpath(&stpath, &filest);
 
 	setpath(stpath.basename, id, buffer->data, buffer->used);
 
@@ -221,7 +225,7 @@ static int fusedoc_ftruncate(const char *path, off_t size, struct fuse_file_info
 	struct st_path stpath;
 	create_path(path, &stpath);
 
-	id = checkpath(stpath.basename, &filest);
+	id = checkpath(&stpath, &filest);
 
 	if (id < 0)
 		return -ENOENT;

@@ -17,10 +17,10 @@ char ** db_listtags(int *n, struct st_path *);
 char *getpath(int id, char **content, int *length);
 char *setpath(const char *,int id, char *content, int size);
 int createpath(struct st_path *);
-int checkpath(const char *path, struct stat *stbuf);
+int checkpath(struct st_path *, struct stat *stbuf);
 char **listpath(int *n, struct st_path *);
 int deletepath(const char *path);
-int renamepath(const char *oldpath, const char *newpath);
+int renamepath(struct st_path *, struct st_path *);
 
 const int EPATHFORMAT;
 const int EPATHNOFOUND;

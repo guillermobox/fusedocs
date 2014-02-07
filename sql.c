@@ -64,7 +64,7 @@ void *init_db(struct fuse_conn_info *conninfo)
 	return NULL;
 };
 
-static int find_tag(const char *tagname, struct stat *stbuf)
+static int find_tag(struct st_path *stpath, struct stat *stbuf)
 {
 	sqlite3_stmt *cur;
 	char statement[128];
@@ -73,7 +73,7 @@ static int find_tag(const char *tagname, struct stat *stbuf)
 	sprintf(statement, "SELECT id FROM Tags WHERE name=?");
 
 	err = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
-	sqlite3_bind_text(cur, 1, tagname, strlen(tagname), NULL);
+	sqlite3_bind_text(cur, 1, stpath->basename, strlen(stpath->basename), NULL);
 	if (err != SQLITE_OK) {
 		printf("Error doing [%s]!\n", statement);
 		exit(1);
@@ -90,21 +90,33 @@ static int find_tag(const char *tagname, struct stat *stbuf)
 	}
 }
 
-static int find_file(const char *filename, struct stat *stbuf)
+static int find_file(struct st_path *stpath, struct stat *stbuf)
 {
 	sqlite3_stmt *cur;
 	char statement[128];
 	int err;
 
-	sprintf(statement, "SELECT id,size FROM FileIndex WHERE name=?");
+	char * str = malloc(1024);
+	strcpy(str, "SELECT FileIndex.id, FileIndex.size FROM FileIndex WHERE FileIndex.name=?");
+	if (stpath->ntokens) {
+		int tok;
+		strcat(str, " AND FileIndex.id IN (");
 
-	err = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
-	sqlite3_bind_text(cur, 1, filename, strlen(filename), NULL);
+		for (tok = 0; tok < stpath->ntokens; tok++) {
+			strcat(str, "SELECT fid FROM FileTagsRef, Tags WHERE tid=Tags.id AND Tags.name=\"");
+			strcat(str, stpath->tokens[tok]);
+			strcat(str, "\" ");
+			if (tok !=stpath->ntokens-1)
+			strcat(str, " INTERSECT ");
+		}
+		strcat(str, ")");
+	}
+	err = sqlite3_prepare_v2(connection, str, 1024, &cur, NULL);
+	sqlite3_bind_text(cur, 1, stpath->basename, strlen(stpath->basename), NULL);
 	if (err != SQLITE_OK) {
 		printf("Error doing [%s]!\n", statement);
 		exit(1);
 	}
-
 	err = sqlite3_step(cur);
 	if (err == SQLITE_DONE) {
 		sqlite3_finalize(cur);
@@ -140,10 +152,10 @@ int db_newtag(const char *tagname)
 	return 0;
 }
 
-int checkpath(const char *path, struct stat *stbuf)
+int checkpath(struct st_path *path, struct stat *stbuf)
 {
 	int id;
-	if (strlen(path) == 0) {
+	if (strlen(path->basename) == 0) {
 		return 0;
 	} else if (find_tag(path, stbuf)>=0) {
 		return 0;
@@ -236,7 +248,6 @@ char ** db_listtags(int *n, struct st_path *stpath)
 		strcat(str, stpath->tokens[tok]);
 		strcat(str, "\"");
 		strcat(str, ")");
-		puts(str);
 		err = sqlite3_prepare_v2(connection, str, 1024, &cur, NULL);
 	} else {
 		sprintf(statement, "SELECT name FROM Tags");
@@ -277,8 +288,6 @@ char **listpath(int *n, struct st_path *stpath)
 
 		strcpy(str, "SELECT FileIndex.name FROM FileIndex WHERE FileIndex.id IN (");
 
-		//SELECT fid from filetagsref where tid=1 intersect SELECT fid from filetagsref where tid=2;
-
 		for (tok = 0; tok < stpath->ntokens; tok++) {
 			strcat(str, "SELECT fid FROM FileTagsRef, Tags WHERE tid=Tags.id AND Tags.name=\"");
 			strcat(str, stpath->tokens[tok]);
@@ -287,8 +296,6 @@ char **listpath(int *n, struct st_path *stpath)
 			strcat(str, " INTERSECT ");
 		}
 		strcat(str, ")");
-		puts(str);
-
 		err = sqlite3_prepare_v2(connection, str, 1024, &cur, NULL);
 	} else {
 		sprintf(statement, "SELECT name FROM FileIndex");
@@ -371,22 +378,44 @@ int deletepath(const char *path)
 	}
 	sqlite3_bind_text(cur, 1, path, -1, NULL);
 	err = sqlite3_step(cur);
+	sqlite3_finalize(cur);
 	return 0;
 }
 
-int renamepath(const char *oldpath, const char *newpath)
+int renamepath(struct st_path *oldpath, struct st_path *newpath)
 {
 	sqlite3_stmt *cur;
 	char statement[128];
 	int err;
+
 	sprintf(statement, "UPDATE FileIndex SET name=? WHERE name=?");
 	err = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
 	if (err != SQLITE_OK) {
 		printf("Error preparing [%s]\n", statement);
 		exit(1);
 	}
-	sqlite3_bind_text(cur, 1, newpath, -1, NULL);
-	sqlite3_bind_text(cur, 2, oldpath, -1, NULL);
+	sqlite3_bind_text(cur, 1, newpath->basename, -1, NULL);
+	sqlite3_bind_text(cur, 2, oldpath->basename, -1, NULL);
 	err = sqlite3_step(cur);
+
+	sprintf(statement, "DELETE FROM FileTagsRef WHERE fid=(SELECT id FROM FileIndex WHERE name=?)");
+	sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
+	sqlite3_bind_text(cur, 1, newpath->basename, strlen(newpath->basename), NULL);
+	sqlite3_step(cur);
+
+	if (newpath->ntokens) {
+		int tok;
+		for (tok = 0; tok < newpath->ntokens; tok++) {
+			sprintf(statement, " INSERT INTO FileTagsRef VALUES ( (SELECT id FROM FileIndex WHERE name=?), (SELECT id FROM Tags WHERE name=?))");
+
+			sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
+			sqlite3_bind_text(cur, 1, newpath->basename, strlen(newpath->basename), NULL);
+			sqlite3_bind_text(cur, 2, newpath->tokens[tok], strlen(newpath->tokens[tok]), NULL);
+			sqlite3_step(cur);
+		}
+	};
+
+	sqlite3_finalize(cur);
+
 	return 0;
 }
