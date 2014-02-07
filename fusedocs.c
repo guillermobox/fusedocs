@@ -8,19 +8,10 @@
 #include <fcntl.h>
 #include "sql.h"
 #include "buffer.h"
+#include "fusedocs.h"
 
 #define FUSE_USE_VERSION 26
 #include <fuse.h>
-
-#define BUFFERLEN 128
-#define MAXSUBDIR 16
-
-struct st_file_buffer buffer_array[BUFFERLEN];
-struct st_path {
-	char * tokens[MAXSUBDIR];
-	char * basename;
-	int ntokens;
-};
 
 void create_path(const char *path, struct st_path *stpath){
 	char * ptr, *newptr;
@@ -35,7 +26,7 @@ void create_path(const char *path, struct st_path *stpath){
 		newptr = strchr(ptr, slash);
 		if (newptr!=NULL){
 			*newptr = '\0';
-			stpath->tokens[stpath->ntokens++] = strdup(newptr);
+			stpath->tokens[stpath->ntokens++] = strdup(ptr);
 			*newptr = '/';
 		}
 		continue;
@@ -102,14 +93,23 @@ static int fusedoc_readdir(const char *path, void *buf,
 {
 	char **paths;
 	int ammount, i;
+	struct st_path stpath;
+	char * newpath;
 
-	if (strcmp(path, "/") != 0)
-		return -ENOENT;
+	if (strcmp(path,"/") !=0 ) {
+		newpath = malloc(strlen(path)+2);
+		strcpy(newpath, path);
+		strcat(newpath, "/");
+	} else {
+		newpath =(char*) path;
+	}
+
+	create_path(newpath, &stpath);
 
 	filler(buf, ".", NULL, 0);
 	filler(buf, "..", NULL, 0);
 
-	paths = listpath(&ammount);
+	paths = listpath(&ammount, &stpath);
 	for (i = 0; i < ammount; i++) {
 		filler(buf, paths[i], NULL, 0);
 		free(paths[i]);

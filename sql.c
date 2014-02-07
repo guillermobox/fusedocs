@@ -243,19 +243,37 @@ char ** db_listtags(int *n)
 	return arraylist;
 };
 
-char **listpath(int *n)
+char **listpath(int *n, struct st_path *stpath)
 {
 	sqlite3_stmt *cur;
 	char statement[128];
 	char **arraylist;
 	int err;
-	int count = 0, allocated = 128;
+	int count = 0, allocated = 1024;
 
 	arraylist = malloc(sizeof(char *) * allocated);
 
-	sprintf(statement, "SELECT name FROM FileIndex");
+	if (stpath->ntokens) {
+		char * str = malloc(1024);
+		int tok;
 
-	err = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
+		strcpy(str, "SELECT FileIndex.name FROM FileIndex, Tags, FileTagsRef WHERE Tags.id=FileTagsRef.tid AND FileIndex.id=FileTagsRef.fid AND Tags.name IN ( ");
+		for (tok = 0; tok < stpath->ntokens-1; tok++) {
+			strcat(str, "\"");
+			strcat(str, stpath->tokens[tok]);
+			strcat(str, "\", ");
+		}
+		strcat(str, "\"");
+		strcat(str, stpath->tokens[tok]);
+		strcat(str, "\"");
+		strcat(str, ")");
+		puts(str);
+		err = sqlite3_prepare_v2(connection, str, 1024, &cur, NULL);
+	} else {
+		sprintf(statement, "SELECT name FROM FileIndex");
+		err = sqlite3_prepare_v2(connection, statement, 128, &cur, NULL);
+	}
+
 	if (err != SQLITE_OK) {
 		printf("Error preparing [%s]\n", statement);
 		exit(1);

@@ -2,6 +2,7 @@
 #define FUSE_USE_VERSION 26
 #include <fuse.h>
 #include "buffer.h"
+#include "fusedocs.h"
 
 #ifndef _SQL_H_
 #define _SQL_H_
@@ -17,7 +18,7 @@ char *getpath(int id, char **content, int *length);
 char *setpath(const char *,int id, char *content, int size);
 int createpath(const char *path);
 int checkpath(const char *path, struct stat *stbuf);
-char **listpath(int *n);
+char **listpath(int *n, struct st_path *);
 int deletepath(const char *path);
 int renamepath(const char *oldpath, const char *newpath);
 
